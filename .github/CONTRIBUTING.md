@@ -13,7 +13,7 @@ The root module uses the standard library only. `store/redis`, `store/kafka`, `r
 
 ## Checks
 
-Run these before opening a pull request, in the root and in every module you changed. CI runs them on Linux for every pull request, every push to `main` and every tag, and the tests on macOS too for a tag.
+Run these before opening a pull request, in the root and in every module you changed. CI runs them on Linux for every pull request, every push to `main` and every tag, and the tests on macOS too.
 
 ```sh
 gofmt -l .
