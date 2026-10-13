@@ -1,0 +1,21 @@
+name: Feature request
+description: A behavior or an option moldrain should have
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What your logs need today
+      description: The lines moldrain groups wrong or the work you still do around it
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What moldrain should do
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried

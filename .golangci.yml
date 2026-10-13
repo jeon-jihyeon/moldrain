@@ -1,0 +1,135 @@
+version: "2"
+linters:
+  enable:
+    - depguard
+    - dupl
+    - forbidigo
+    - funlen
+    - gocritic
+    - gocyclo
+    - nakedret
+    - revive
+    - unparam
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    funlen:
+      lines: 70
+      statements: 50
+    dupl:
+      threshold: 120
+    gocyclo:
+      min-complexity: 15
+    revive:
+      rules:
+        - name: comment-spacings
+          disabled: true
+        - name: exported
+          disabled: true
+    # No package reads the process environment
+    # The CLI is the only reader
+    forbidigo:
+      forbid:
+        - pattern: ^os\.(Getenv|LookupEnv|Environ)$
+          msg: only cmd/moldrain reads the environment, a library takes options
+    # The layer rules of the capability map
+    # 1. token imports nothing of the module
+    # 2. tree imports token
+    # 3. the miner at the root imports tree and token
+    # 4. persist, resolve and assay use the root API only
+    # 5. the root module imports the standard library only
+    depguard:
+      rules:
+        core:
+          list-mode: strict
+          files:
+            - $all
+            - "!$test"
+            - "!**/store/**"
+            - "!**/bench/**"
+          allow:
+            - $gostd
+            - github.com/jeon-jihyeon/moldrain
+        token:
+          files:
+            - "**/internal/token/*.go"
+            - "!$test"
+          deny:
+            - pkg: github.com/jeon-jihyeon/moldrain
+              desc: token imports nothing of the module
+        tree:
+          files:
+            - "**/internal/tree/*.go"
+            - "!$test"
+          deny:
+            - pkg: github.com/jeon-jihyeon/moldrain$
+              desc: tree sits below the miner
+            - pkg: github.com/jeon-jihyeon/moldrain/persist
+              desc: tree sits below persist
+            - pkg: github.com/jeon-jihyeon/moldrain/resolve
+              desc: tree sits below resolve
+            - pkg: github.com/jeon-jihyeon/moldrain/store
+              desc: tree sits below the stores
+            - pkg: github.com/jeon-jihyeon/moldrain/assay
+              desc: tree sits below assay
+        # the root package by exclusion, so the rule holds whatever the checkout directory is named
+        miner:
+          files:
+            - $all
+            - "!$test"
+            - "!**/internal/**"
+            - "!**/persist/**"
+            - "!**/resolve/**"
+            - "!**/assay/**"
+            - "!**/store/**"
+            - "!**/cmd/**"
+            - "!**/bench/**"
+          deny:
+            - pkg: github.com/jeon-jihyeon/moldrain/persist
+              desc: the miner never waits on a store and persist subscribes to it
+            - pkg: github.com/jeon-jihyeon/moldrain/resolve
+              desc: the miner never waits on a resolver and resolve subscribes to it
+            - pkg: github.com/jeon-jihyeon/moldrain/store
+              desc: the root module imports no store
+            - pkg: github.com/jeon-jihyeon/moldrain/assay
+              desc: the miner never knows assay and assay subscribes to it
+        edges:
+          files:
+            - "**/persist/**"
+            - "**/resolve/**"
+            - "**/store/**"
+            - "**/assay/**"
+            - "**/cmd/**"
+            - "**/bench/**"
+          deny:
+            - pkg: github.com/jeon-jihyeon/moldrain/internal
+              desc: persist, resolve, assay, the stores, the CLI and the bench use the root API only
+        assay:
+          files:
+            - "**/assay/*.go"
+          deny:
+            - pkg: github.com/jeon-jihyeon/moldrain/persist
+              desc: assay imports the root package only
+            - pkg: github.com/jeon-jihyeon/moldrain/resolve
+              desc: assay imports the root package only
+  exclusions:
+    rules:
+      # Tests are scenarios and not units
+      - path: _test\.go
+        linters:
+          - dupl
+          - funlen
+          - gocyclo
+          - unparam
+          - forbidigo
+      - path: cmd/moldrain/
+        linters:
+          - forbidigo
+      # The bench is a measuring tool and not part of the library
+      - path: bench/
+        linters:
+          - funlen
+          - gocyclo
