@@ -63,9 +63,9 @@ func TestTrainThenMatch(t *testing.T) {
 		steps []step
 	}{
 		{"match finds what train learned", moldrain.Options{MatchAfterTrain: true}, []step{
-			{true, "login ok for alice from 10.0.0.1", true, "login ok for alice from <*>", []string{"10.0.0.1"}, moldrain.Created},
-			{true, "login ok for bob from 10.0.0.2", true, "login ok for <*> from <*>", []string{"bob", "10.0.0.2"}, moldrain.Changed},
-			{false, "login ok for carol from 10.9.9.9", true, "login ok for <*> from <*>", []string{"carol", "10.9.9.9"}, moldrain.Matched},
+			{true, "login ok for alice from 192.0.2.1", true, "login ok for alice from <*>", []string{"192.0.2.1"}, moldrain.Created},
+			{true, "login ok for bob from 192.0.2.2", true, "login ok for <*> from <*>", []string{"bob", "192.0.2.2"}, moldrain.Changed},
+			{false, "login ok for carol from 192.0.2.99", true, "login ok for <*> from <*>", []string{"carol", "192.0.2.99"}, moldrain.Matched},
 			{false, "something else entirely here", false, "", nil, 0},
 		}},
 		{"match without a publish sees nothing", moldrain.Options{PublishEvery: time.Hour}, []step{
@@ -104,7 +104,7 @@ func TestMatchAllocs(t *testing.T) {
 		want  float64
 	}{
 		{"no variables", []string{"disk is full"}, 0},
-		{"two variables", []string{"user alice from 10.0.0.1", "user bob from 10.0.0.2"}, 1},
+		{"two variables", []string{"user alice from 192.0.2.1", "user bob from 192.0.2.2"}, 1},
 		{"five variables", []string{"a 1 b 2 c 3 d 4 e 5", "a 6 b 7 c 8 d 9 e 10"}, 1},
 	}
 	for _, tc := range tcs {
@@ -326,7 +326,7 @@ func TestConcurrentMatchAndTrain(t *testing.T) {
 func genLines(n int) []string {
 	r := rand.New(rand.NewPCG(7, 8))
 	formats := []string{
-		"user %s logged in from 10.0.%d.%d",
+		"user %s logged in from 2001:db8::%x:%x",
 		"request %x took %d ms",
 		"disk %s usage %d percent",
 		"job %s finished with %d items",

@@ -150,7 +150,7 @@ func lines(n int) []string {
 		w := words[r.IntN(len(words))]
 		switch r.IntN(3) {
 		case 0:
-			out[i] = fmt.Sprintf("user %s logged in from 10.0.%d.%d", w, r.IntN(256), r.IntN(256))
+			out[i] = fmt.Sprintf("user %s logged in from 2001:db8::%x:%x", w, r.IntN(256), r.IntN(256))
 		case 1:
 			out[i] = fmt.Sprintf("disk full on %s at %d percent", w, r.IntN(100))
 		default:

@@ -15,11 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const sample = `connected to 10.0.0.1 in 12ms
-connected to 10.0.0.2 in 7ms
+const sample = `connected to 192.0.2.1 in 12ms
+connected to 192.0.2.2 in 7ms
 disk full on sda
 disk full on sdb
-connected to 10.0.0.3 in 9ms
+connected to 192.0.2.3 in 9ms
 `
 
 func noenv(string) string { return "" }

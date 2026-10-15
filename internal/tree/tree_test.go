@@ -162,7 +162,7 @@ func TestTrain(t *testing.T) {
 			"kind placeholders render the kind a slot kept",
 			tree.Options{KindPlaceholders: true},
 			token.NewPlain(token.Config{}),
-			[]string{"took 5ms from 10.0.0.1", "took 7ms from 10.0.0.2", "took x from 10.0.0.3"},
+			[]string{"took 5ms from 192.0.2.1", "took 7ms from 192.0.2.2", "took x from 192.0.2.3"},
 			[][]int{{0, 1, 2}},
 			[]string{"took <*> from <ip>"},
 		},
@@ -537,7 +537,7 @@ func genLines(r *rand.Rand, n int) []string {
 			case "%n":
 				fmt.Fprintf(&b, "%d", r.IntN(5000))
 			case "%ip":
-				fmt.Fprintf(&b, "10.0.%d.%d", r.IntN(256), r.IntN(256))
+				fmt.Fprintf(&b, "2001:db8::%x:%x", r.IntN(256), r.IntN(256))
 			case "%id":
 				fmt.Fprintf(&b, "id-%x", r.Uint32())
 			default:
