@@ -14,15 +14,15 @@ func Example() {
 	}
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	for _, line := range []string{
-		"connected to 10.0.0.1 in 12ms",
-		"connected to 10.0.0.2 in 7ms",
+		"connected to 192.0.2.1 in 12ms",
+		"connected to 192.0.2.2 in 7ms",
 		"disk full on sda",
 		"disk full on sdb",
 	} {
 		r := m.Train([]byte(line), at)
 		fmt.Printf("%-8s %s\n", r.Event, r.Template)
 	}
-	r, ok := m.Match([]byte("connected to 10.0.0.9 in 3ms"))
+	r, ok := m.Match([]byte("connected to 192.0.2.9 in 3ms"))
 	fmt.Println(ok, r.Template, len(r.Params))
 	// Output:
 	// created  connected to <*> in <*>

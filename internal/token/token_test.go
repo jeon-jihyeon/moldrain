@@ -33,8 +33,8 @@ func TestPlain(t *testing.T) {
 	}{
 		{"empty line has no tokens", "", "", []tok{}},
 		{"only delimiters have no tokens", "", " \t  \t", []tok{}},
-		{"words and kinds", "", "Accepted password for 10.0.0.1 port 22 took 15ms", []tok{
-			c("Accepted"), c("password"), c("for"), {"10.0.0.1", token.IP}, c("port"), {"22", token.Num}, c("took"), {"15ms", token.Num},
+		{"words and kinds", "", "Accepted password for 192.0.2.1 port 22 took 15ms", []tok{
+			c("Accepted"), c("password"), c("for"), {"192.0.2.1", token.IP}, c("port"), {"22", token.Num}, c("took"), {"15ms", token.Num},
 		}},
 		{"tabs and runs of spaces split once", "", "a\t\tb   c", []tok{c("a"), c("b"), c("c")}},
 		{"extra delimiters split like spaces", "=,", "user=bob,id=7", []tok{c("user"), c("bob"), c("id"), {"7", token.Num}}},
@@ -85,7 +85,7 @@ func TestPunct(t *testing.T) {
 		{"punctuation splits", "user=bob;id:[42]", []tok{c("user"), c("bob"), c("id"), {"42", token.Num}}},
 		{"dot inside a number stays", "took 1.5s ok.", []tok{c("took"), {"1.5s", token.Num}, c("ok")}},
 		{"dash inside a word stays", "re-try -x a-", []tok{c("re-try"), c("x"), c("a")}},
-		{"ip keeps its dots", "from 10.1.2.3:80", []tok{c("from"), {"10.1.2.3", token.IP}, {"80", token.Num}}},
+		{"ip keeps its dots", "from 192.0.2.13:80", []tok{c("from"), {"192.0.2.13", token.IP}, {"80", token.Num}}},
 		{"dotted words split", "java.lang.Error", []tok{c("java"), c("lang"), c("Error")}},
 		{"only punctuation has no tokens", "=:;[]", []tok{}},
 	}
@@ -147,8 +147,8 @@ func TestLogfmt(t *testing.T) {
 
 func TestVerbatim(t *testing.T) {
 	p := token.NewPlain(token.Config{Scan: token.Scanner{Verbatim: true}})
-	line := "port 22 from 10.0.0.1"
-	assert.Equal(t, []tok{c("port"), c("22"), c("from"), c("10.0.0.1")}, texts(line, p.Tokens([]byte(line), nil)))
+	line := "port 22 from 192.0.2.1"
+	assert.Equal(t, []tok{c("port"), c("22"), c("from"), c("192.0.2.1")}, texts(line, p.Tokens([]byte(line), nil)))
 }
 
 func TestMasks(t *testing.T) {
@@ -204,7 +204,7 @@ func TestInternerConcurrent(t *testing.T) {
 }
 
 func FuzzTokens(f *testing.F) {
-	for _, s := range []string{"", "a b", `{"a":[1,{"b":"c"}]}`, `k="v x" y=`, "10.0.0.1:80 ::1 0xff", "\xff\x00 =="} {
+	for _, s := range []string{"", "a b", `{"a":[1,{"b":"c"}]}`, `k="v x" y=`, "192.0.2.1:80 ::1 0xff", "\xff\x00 =="} {
 		f.Add(s)
 	}
 	toks := []token.Tokenizer{

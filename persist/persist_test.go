@@ -31,7 +31,7 @@ var (
 func lines(seed uint64, n int) []string {
 	r := rand.New(rand.NewPCG(seed, 11))
 	formats := []string{
-		"user %s logged in from 10.0.%d.%d",
+		"user %s logged in from 2001:db8::%x:%x",
 		"request %x took %d ms",
 		"disk full on %s at %d percent",
 		"job finished %s with %d items",

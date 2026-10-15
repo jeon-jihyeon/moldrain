@@ -12,9 +12,9 @@ var benchLines = []struct {
 	line string
 }{
 	{"Plain", token.NewPlain(token.Config{}), "260301 101500 42 INFO store.Node$Writer: Writer 1 for block blk_12345678901234567 terminating"},
-	{"Punct", token.NewPunct(token.Config{}), "Accepted password for root from 10.0.0.1 port 22 ssh2 user=root uid=0 took=15ms"},
-	{"JSON", token.NewJSON(token.Config{}), `{"level":"info","msg":"request done","status":200,"ms":12.5,"ip":"10.0.0.1"}`},
-	{"Logfmt", token.NewLogfmt(token.Config{}), `level=info msg="request done" status=200 ms=12.5 ip=10.0.0.1`},
+	{"Punct", token.NewPunct(token.Config{}), "Accepted password for root from 192.0.2.1 port 22 ssh2 user=root uid=0 took=15ms"},
+	{"JSON", token.NewJSON(token.Config{}), `{"level":"info","msg":"request done","status":200,"ms":12.5,"ip":"192.0.2.1"}`},
+	{"Logfmt", token.NewLogfmt(token.Config{}), `level=info msg="request done" status=200 ms=12.5 ip=192.0.2.1`},
 }
 
 func BenchmarkTokens(b *testing.B) {
