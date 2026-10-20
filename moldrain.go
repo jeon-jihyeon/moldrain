@@ -78,6 +78,7 @@ type Result struct {
 	// Params follow the slots of this alias
 	Alias ID
 	// Views into the line with one per variable slot
+	// Caller-owned copies for values retained past input buffer reuse
 	Params [][]byte
 	Event  EventKind
 }
