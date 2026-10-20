@@ -21,7 +21,7 @@ var version = "dev"
 const usage = `moldrain learns log templates the way Drain does
 
   moldrain mine [--state <dir>] [--tokenizer plain|punct|json|logfmt] [--sim 0.4] [--json] [file ...]
-  moldrain match --state <dir> [--tokenizer plain|punct|json|logfmt] [--sim 0.4] [--strict] [file ...]
+  moldrain match --state <dir> [--tokenizer plain|punct|json|logfmt] [--sim 0.4] [--strict] [--json] [file ...]
   moldrain show --state <dir> [--tokenizer plain|punct|json|logfmt] [--sim 0.4] [--json]
   moldrain assay --profiles <file.json> [--window 5m] [--lateness 30s] [--state <dir>] [--tokenizer plain|punct|json|logfmt] [--sim 0.4] [file ...]
   moldrain version
@@ -87,7 +87,6 @@ func flags(name string, getenv func(string) string) common {
 	}
 }
 
-// The flag of the commands that print templates
 func jsonFlag(c common) *bool { return c.fs.Bool("json", false, "print JSON lines") }
 
 func (c common) miner() (*moldrain.Miner, error) {
@@ -154,6 +153,7 @@ func load(c common) (*moldrain.Miner, error) {
 func match(args []string, stdin io.Reader, stdout io.Writer, getenv func(string) string) error {
 	c := flags("match", getenv)
 	strict := c.fs.Bool("strict", false, "exit 1 when any line matched no template")
+	asJSON := jsonFlag(c)
 	if err := c.fs.Parse(args); err != nil {
 		return err
 	}
@@ -162,13 +162,18 @@ func match(args []string, stdin io.Reader, stdout io.Writer, getenv func(string)
 		return err
 	}
 	w := bufio.NewWriter(stdout)
+	enc := json.NewEncoder(stdout)
+	limit := m.Options().MaxLineBytes
 	missed := false
 	err = eachLine(c.fs.Args(), stdin, func(line []byte) error {
+		r, ok := m.Match(line)
+		missed = missed || !ok
+		if *asJSON {
+			return enc.Encode(newMatchRow(line, r, ok, limit))
+		}
 		id := "-"
-		if r, ok := m.Match(line); ok {
+		if ok {
 			id = r.ID.String()
-		} else {
-			missed = true
 		}
 		_, err := fmt.Fprintf(w, "%s\t%s\n", id, line)
 		return err
