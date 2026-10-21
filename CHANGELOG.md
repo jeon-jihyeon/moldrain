@@ -2,12 +2,11 @@
 
 All notable changes to moldrain are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.0] - 2026-10-21
 
 ### Added
 
 - Optional versioned JSONL for `match` with parameters, alias identity, exact byte values and prefix truncation metadata
-
 - Tokenizers for plain, punctuation split, JSON and logfmt lines with typed scanners for numbers, hex, IPs, UUIDs and times, allocation free after warm up
 - Drain parse tree with branch positions picked by observed cardinality, template ids hashed from the template, and change events
 - `Train` and a `Match` that takes no lock and reads a published view any number of goroutines share, a cluster cap with eviction, and per template counts per time bucket
