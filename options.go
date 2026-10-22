@@ -67,8 +67,10 @@ type Options struct {
 	// nil means DefaultUnits and an empty slice means none
 	Units []string
 	// Scanners of the caller's own that run after the built in ones
-	// The options hash knows only how many there are
+	// The options hash knows only how many there are and MaskVersion
 	Masks []Mask
+	// Change it whenever a mask marks other tokens so configurations with different masks stay distinct
+	MaskVersion string
 
 	// Renders <num>, <ip> and so on instead of <*>
 	KindPlaceholders bool
@@ -233,6 +235,11 @@ func (o Options) Hash() uint64 {
 		"masks=" + strconv.Itoa(len(o.Masks)),
 		"respecialize=" + strconv.FormatBool(o.Respecialize) + "/" + strconv.Itoa(o.SplitValues) + "/" + strconv.Itoa(o.SplitMin),
 		"spans=" + strconv.FormatBool(o.Spans) + "/" + strconv.Itoa(o.MaxSpan),
+	}
+	// an empty MaskVersion adds no field
+	// The hash of state stored before the field stays the same
+	if o.MaskVersion != "" {
+		fields = append(fields, "maskversion="+strconv.Quote(o.MaskVersion))
 	}
 	h := uint64(14695981039346656037)
 	for _, f := range fields {

@@ -18,6 +18,9 @@ import (
 
 var t0 = time.Date(2026, 1, 2, 3, 4, 0, 0, time.UTC)
 
+// a mask that marks nothing
+var masks = []moldrain.Mask{func([]byte) (moldrain.Kind, bool) { return 0, false }}
+
 func newMiner(t testing.TB, opt moldrain.Options) *moldrain.Miner {
 	t.Helper()
 	m, err := moldrain.New(opt)
@@ -63,9 +66,18 @@ func TestTrainThenMatch(t *testing.T) {
 		steps []step
 	}{
 		{"match finds what train learned", moldrain.Options{MatchAfterTrain: true}, []step{
-			{true, "login ok for alice from 192.0.2.1", true, "login ok for alice from <*>", []string{"192.0.2.1"}, moldrain.Created},
-			{true, "login ok for bob from 192.0.2.2", true, "login ok for <*> from <*>", []string{"bob", "192.0.2.2"}, moldrain.Changed},
-			{false, "login ok for carol from 192.0.2.99", true, "login ok for <*> from <*>", []string{"carol", "192.0.2.99"}, moldrain.Matched},
+			{
+				true, "login ok for alice from 192.0.2.1", true, "login ok for alice from <*>",
+				[]string{"192.0.2.1"}, moldrain.Created,
+			},
+			{
+				true, "login ok for bob from 192.0.2.2", true, "login ok for <*> from <*>",
+				[]string{"bob", "192.0.2.2"}, moldrain.Changed,
+			},
+			{
+				false, "login ok for carol from 192.0.2.99", true, "login ok for <*> from <*>",
+				[]string{"carol", "192.0.2.99"}, moldrain.Matched,
+			},
 			{false, "something else entirely here", false, "", nil, 0},
 		}},
 		{"match without a publish sees nothing", moldrain.Options{PublishEvery: time.Hour}, []step{
@@ -435,12 +447,27 @@ func TestRestore(t *testing.T) {
 		args args
 		want want
 	}{
-		{"a replay restores every template", args{moldrain.Options{}, nil, replay(events, nil)}, want{nil, all, moldrain.ErrNotEmpty, all}},
-		{"a state and the changes after it", args{moldrain.Options{}, &st, replay(events[half:], nil)}, want{nil, all, moldrain.ErrNotEmpty, all}},
-		{"a failed read leaves the miner empty for a retry", args{moldrain.Options{}, nil, replay(events[:half], broken)}, want{broken, 0, nil, all}},
+		{
+			"a replay restores every template", args{moldrain.Options{}, nil, replay(events, nil)},
+			want{nil, all, moldrain.ErrNotEmpty, all},
+		},
+		{
+			"a state and the changes after it", args{moldrain.Options{}, &st, replay(events[half:], nil)},
+			want{nil, all, moldrain.ErrNotEmpty, all},
+		},
+		{
+			"a failed read leaves the miner empty for a retry", args{moldrain.Options{}, nil, replay(events[:half], broken)},
+			want{broken, 0, nil, all},
+		},
 		{"a state that is no tree", args{moldrain.Options{}, &bad, nil}, want{moldrain.ErrState, 0, nil, all}},
-		{"a change that diverges from the state", args{moldrain.Options{}, &st, replay([]moldrain.Event{again}, nil)}, want{moldrain.ErrDiverged, 0, nil, all}},
-		{"templates past the cap are evicted", args{moldrain.Options{MaxClusters: 3}, nil, replay(events, nil)}, want{nil, 3, moldrain.ErrNotEmpty, 3}},
+		{
+			"a change that diverges from the state", args{moldrain.Options{}, &st, replay([]moldrain.Event{again}, nil)},
+			want{moldrain.ErrDiverged, 0, nil, all},
+		},
+		{
+			"templates past the cap are evicted", args{moldrain.Options{MaxClusters: 3}, nil, replay(events, nil)},
+			want{nil, 3, moldrain.ErrNotEmpty, 3},
+		},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -465,8 +492,23 @@ func TestOptionsHash(t *testing.T) {
 			KindPlaceholders: true, PublishEvery: time.Second, MaxClusters: 9, Bucket: time.Hour, KeepValues: 3,
 		}, true},
 		{"another similarity", moldrain.Options{}, moldrain.Options{SimTh: 0.5}, false},
-		{"units joined by a comma", moldrain.Options{Units: []string{"a,b"}}, moldrain.Options{Units: []string{"a", "b"}}, false},
+		{
+			"units joined by a comma", moldrain.Options{Units: []string{"a,b"}},
+			moldrain.Options{Units: []string{"a", "b"}}, false,
+		},
 		{"no units against the default units", moldrain.Options{Units: []string{}}, moldrain.Options{}, false},
+		{
+			"another mask version",
+			moldrain.Options{Masks: masks, MaskVersion: "v1"},
+			moldrain.Options{Masks: masks, MaskVersion: "v2"},
+			false,
+		},
+		{
+			"a mask version against none",
+			moldrain.Options{Masks: masks, MaskVersion: "v1"},
+			moldrain.Options{Masks: masks},
+			false,
+		},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -474,6 +516,24 @@ func TestOptionsHash(t *testing.T) {
 			assert.Equal(t, tc.same, tc.a.Hash() == tc.b.Hash())
 			m := newMiner(t, tc.a)
 			assert.Equal(t, tc.a.Hash(), m.Fingerprint())
+		})
+	}
+}
+
+// The hash a stored snapshot holds stays the same across releases
+func TestOptionsHashStable(t *testing.T) {
+	tcs := []struct {
+		name string
+		opt  moldrain.Options
+		want uint64
+	}{
+		{"defaults", moldrain.Options{}, 0x7812a6c7d852cce1},
+		{"one mask without a version", moldrain.Options{Masks: masks}, 0x96d42b9f57e90c78},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.want, tc.opt.Hash())
 		})
 	}
 }
