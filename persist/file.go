@@ -38,12 +38,32 @@ func NewFileStore(dir string) (*FileStore, error) {
 // The snapshot and the whole records of the log
 // It never writes
 // A torn tail from a crash mid append is left for the writer's next Append to cut
+// A bad record before the last fails with ErrCorrupt
 // A Replace of another process between the two reads makes it read both again
 func (s *FileStore) Load(ctx context.Context) ([]byte, iter.Seq2[[]byte, error], error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	snap, log, err := s.read()
+	if err != nil {
+		return nil, nil, err
+	}
+	frames, _, err := splitFrames(log)
+	if err != nil {
+		return nil, nil, err
+	}
+	return snap, func(yield func([]byte, error) bool) {
+		for _, f := range frames {
+			if !yield(f, nil) {
+				return
+			}
+		}
+	}, nil
+}
+
+// The bytes of both files read while the snapshot stayed one file
+// A rename between the reads gives the snapshot another file and reads both again
+func (s *FileStore) read() (snap, log []byte, err error) {
 	path := filepath.Join(s.dir, snapshotFile)
-	var snap, log []byte
 	for {
 		before, err := os.Stat(path)
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -59,19 +79,10 @@ func (s *FileStore) Load(ctx context.Context) ([]byte, iter.Seq2[[]byte, error],
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return nil, nil, err
 		}
-		// a rename gives the snapshot another file
 		if (before == nil && after == nil) || (before != nil && after != nil && os.SameFile(before, after)) {
-			break
+			return snap, log, nil
 		}
 	}
-	frames, _ := splitFrames(log)
-	return snap, func(yield func([]byte, error) bool) {
-		for _, f := range frames {
-			if !yield(f, nil) {
-				return
-			}
-		}
-	}, nil
 }
 
 // A failed write is cut back off the file
@@ -158,12 +169,17 @@ func readOptional(path string) ([]byte, error) {
 }
 
 // Cuts the log after its last whole record
+// A bad record before the last is never cut with the records after it
 func cutTornTail(path string) error {
 	log, err := readOptional(path)
 	if err != nil {
 		return err
 	}
-	if _, good := splitFrames(log); good < len(log) {
+	_, good, err := splitFrames(log)
+	if err != nil {
+		return err
+	}
+	if good < len(log) {
 		return os.Truncate(path, int64(good))
 	}
 	return nil

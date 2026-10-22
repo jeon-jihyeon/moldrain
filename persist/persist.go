@@ -163,9 +163,9 @@ func (p *Persister) load(ctx context.Context) (found, logged bool, err error) {
 	}
 	if snap == nil {
 		// Attach writes a snapshot before the first record
-		// Records without one are leftovers of a store that never finished its first start
-		// The snapshot written next drops them
-		return false, false, nil
+		// Records without one mean the snapshot was lost
+		// A new snapshot would erase what they refer to
+		return false, false, emptyLog(changes)
 	}
 	h, st, err := decodeSnapshot(snap)
 	if err != nil {
@@ -180,6 +180,23 @@ func (p *Persister) load(ctx context.Context) (found, logged bool, err error) {
 	}
 	p.seq = log.applied
 	return true, log.records > 0, nil
+}
+
+// ErrCorrupt when the log holds a record
+func emptyLog(changes iter.Seq2[[]byte, error]) error {
+	if changes == nil {
+		return nil
+	}
+	next, stop := iter.Pull2(changes)
+	defer stop()
+	_, err, ok := next()
+	switch {
+	case !ok:
+		return nil
+	case err != nil:
+		return fmt.Errorf("load: %w", err)
+	}
+	return fmt.Errorf("%w: change records without a snapshot", ErrCorrupt)
 }
 
 // What a replay of a change log read
