@@ -125,6 +125,8 @@ func TestFileStoreCutsTornTail(t *testing.T) {
 	}{
 		{"a short frame head", []byte{0, 0, 0}, 2},
 		{"a frame shorter than its length", []byte{0, 0, 0, 40, 1, 2}, 2},
+		{"a frame length past a 32 bit int", []byte{0x80, 0, 0, 0, 0, 0, 0, 0}, 2},
+		{"the largest frame length", []byte{0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0}, 2},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -132,7 +134,8 @@ func TestFileStoreCutsTornTail(t *testing.T) {
 			dir := t.TempDir()
 			s := fileStore(t, dir)
 			ctx := context.Background()
-			require.NoError(t, s.Append(ctx, [][]byte{persist.EncodeChange(1, moldrain.Event{Kind: moldrain.Evicted, ID: 1, At: t0})}))
+			record := persist.EncodeChange(1, moldrain.Event{Kind: moldrain.Evicted, ID: 1, At: t0})
+			require.NoError(t, s.Append(ctx, [][]byte{record}))
 			f, err := os.OpenFile(filepath.Join(dir, "changes"), os.O_APPEND|os.O_WRONLY, 0)
 			require.NoError(t, err)
 			_, err = f.Write(tc.torn)
@@ -147,12 +150,98 @@ func TestFileStoreCutsTornTail(t *testing.T) {
 			after, err := os.Stat(filepath.Join(dir, "changes"))
 			require.NoError(t, err)
 			require.Equal(t, before.Size(), after.Size())
-			require.NoError(t, fileStore(t, dir).Append(ctx, [][]byte{persist.EncodeChange(2, moldrain.Event{Kind: moldrain.Evicted, ID: 2, At: t0})}))
+			next := persist.EncodeChange(2, moldrain.Event{Kind: moldrain.Evicted, ID: 2, At: t0})
+			require.NoError(t, fileStore(t, dir).Append(ctx, [][]byte{next}))
 			_, changes, err := s.Load(ctx)
 			require.NoError(t, err)
 			evs, err := persist.ReadChanges(changes)
 			require.NoError(t, err)
 			assert.Len(t, evs, tc.want)
+		})
+	}
+}
+
+func TestFileStoreLoadErrors(t *testing.T) {
+	type args struct {
+		entry string
+		loop  bool
+	}
+	tcs := []struct {
+		name string
+		args args
+	}{
+		{"snapshot is a directory", args{"snapshot", false}},
+		{"changes is a directory", args{"changes", false}},
+		{"snapshot is a symlink loop", args{"snapshot", true}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			s := fileStore(t, dir)
+			path := filepath.Join(dir, tc.args.entry)
+			if tc.args.loop {
+				require.NoError(t, os.Symlink(tc.args.entry, path))
+			} else {
+				require.NoError(t, os.Mkdir(path, 0o700))
+			}
+			snap, changes, err := s.Load(context.Background())
+			assert.Error(t, err)
+			assert.Nil(t, snap)
+			assert.Nil(t, changes)
+		})
+	}
+}
+
+// A bad record before the last refuses the log
+// A bad checksum on the last record is a torn tail
+func TestFileStoreBadRecord(t *testing.T) {
+	type want struct {
+		err     error
+		records int
+		// the log keeps its bytes after the next Append
+		kept bool
+	}
+	tcs := []struct {
+		name string
+		// the record whose payload changes
+		at   int
+		want want
+	}{
+		{"a changed payload before the last", 0, want{persist.ErrCorrupt, 0, true}},
+		{"a bad checksum on the last record", 2, want{nil, 2, false}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+			dir := t.TempDir()
+			path := filepath.Join(dir, "changes")
+			recs := make([][]byte, 3)
+			end := 0
+			for i := range recs {
+				recs[i] = persist.EncodeChange(uint64(i+1),
+					moldrain.Event{Kind: moldrain.Evicted, ID: moldrain.ID(i + 1), At: t0})
+				if i <= tc.at {
+					end += len(recs[i])
+				}
+			}
+			require.NoError(t, fileStore(t, dir).Append(ctx, recs))
+			log, err := os.ReadFile(path)
+			require.NoError(t, err)
+			log[end-1] ^= 1
+			require.NoError(t, os.WriteFile(path, log, 0o600))
+
+			_, changes, err := fileStore(t, dir).Load(ctx)
+			assert.ErrorIs(t, err, tc.want.err)
+			evs, err := persist.ReadChanges(changes)
+			require.NoError(t, err)
+			assert.Len(t, evs, tc.want.records)
+			next := persist.EncodeChange(4, moldrain.Event{Kind: moldrain.Evicted, ID: 4, At: t0})
+			assert.ErrorIs(t, fileStore(t, dir).Append(ctx, [][]byte{next}), tc.want.err)
+			after, err := os.ReadFile(path)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want.kept, slices.Equal(log, after))
 		})
 	}
 }
@@ -274,6 +363,44 @@ func TestLoadTornRecord(t *testing.T) {
 			s.EXPECT().Load(gomock.Any()).Return(snap, iter.Seq2[[]byte, error](changes), nil).AnyTimes()
 			_, err = persist.Load(ctx, newMiner(t, moldrain.Options{}), s)
 			assert.ErrorIs(t, err, tc.want)
+		})
+	}
+}
+
+// A store without a snapshot loads empty only when its log holds no record
+func TestLoadWithoutSnapshot(t *testing.T) {
+	type rec struct {
+		b   []byte
+		err error
+	}
+	tcs := []struct {
+		name string
+		recs []rec
+		want error
+	}{
+		{"no record", nil, nil},
+		{
+			"a record whose snapshot was lost",
+			[]rec{{persist.EncodeChange(1, moldrain.Event{Kind: moldrain.Evicted, ID: 1, At: t0}), nil}},
+			persist.ErrCorrupt,
+		},
+		{"a log that fails to read", []rec{{nil, errBroken}}, errBroken},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			changes := func(yield func([]byte, error) bool) {
+				for _, r := range tc.recs {
+					if !yield(r.b, r.err) {
+						return
+					}
+				}
+			}
+			s := NewMockStore(gomock.NewController(t))
+			s.EXPECT().Load(gomock.Any()).Return(nil, iter.Seq2[[]byte, error](changes), nil)
+			ok, err := persist.Load(context.Background(), newMiner(t, moldrain.Options{}), s)
+			assert.ErrorIs(t, err, tc.want)
+			assert.False(t, ok)
 		})
 	}
 }
@@ -419,6 +546,33 @@ func TestAttachRefuses(t *testing.T) {
 			persist.ErrCorrupt,
 		},
 		{
+			"a change record changed before the last",
+			func(t *testing.T, dir string) {
+				m := newMiner(t, moldrain.Options{})
+				p := attach(t, m, fileStore(t, dir), persist.Options{})
+				ls := lines(17, 600)
+				for _, from := range []int{0, 200, 400} {
+					train(m, ls[from:from+200], from)
+					require.NoError(t, p.Flush(context.Background()))
+				}
+				path := filepath.Join(dir, "changes")
+				log, err := os.ReadFile(path)
+				require.NoError(t, err)
+				// a payload byte of the first record
+				log[10] ^= 1
+				require.NoError(t, os.WriteFile(path, log, 0o600))
+			},
+			persist.ErrCorrupt,
+		},
+		{
+			"change records without a snapshot",
+			func(t *testing.T, dir string) {
+				first := persist.EncodeChange(1, moldrain.Event{Kind: moldrain.Evicted, ID: 1, At: t0})
+				require.NoError(t, fileStore(t, dir).Append(context.Background(), [][]byte{first}))
+			},
+			persist.ErrCorrupt,
+		},
+		{
 			"a change log with a missing record",
 			func(t *testing.T, dir string) {
 				m := newMiner(t, moldrain.Options{})
@@ -435,12 +589,28 @@ func TestAttachRefuses(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
 			tc.init(t, dir)
+			before := files(t, dir)
 			m := newMiner(t, moldrain.Options{})
 			_, err := persist.Attach(context.Background(), m, fileStore(t, dir), persist.Options{})
 			assert.ErrorIs(t, err, tc.want)
 			assert.Equal(t, 0, m.Stats().Clusters)
+			// a refused load leaves the store as it was
+			assert.Equal(t, before, files(t, dir))
 		})
 	}
+}
+
+func files(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	out := map[string]string{}
+	for _, e := range entries {
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		require.NoError(t, err)
+		out[e.Name()] = string(b)
+	}
+	return out
 }
 
 func TestAttachFirstSnapshotFails(t *testing.T) {

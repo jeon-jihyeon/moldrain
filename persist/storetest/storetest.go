@@ -4,6 +4,7 @@ package storetest
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -81,6 +82,25 @@ func Run(t *testing.T, open func(t *testing.T) persist.Store) {
 			t.Fatalf("read %d events, want the %d whole records", len(evs), len(recs))
 		}
 	})
+	t.Run("records without a snapshot refused", func(t *testing.T) { lostSnapshot(t, open(t)) })
+}
+
+// A log whose snapshot was lost fails the load and stays in the store
+func lostSnapshot(t *testing.T, s persist.Store) {
+	recs := records(1, 2)
+	appendAll(t, s, recs)
+	m, err := moldrain.New(moldrain.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := persist.Load(context.Background(), m, s); !errors.Is(err, persist.ErrCorrupt) {
+		t.Fatalf("load of a log whose snapshot was lost: %v, want ErrCorrupt", err)
+	}
+	snap, got := load(t, s)
+	if snap != nil {
+		t.Fatalf("a refused load left a snapshot of %d bytes", len(snap))
+	}
+	equal(t, recs, got)
 }
 
 func load(t *testing.T, s persist.Store) ([]byte, [][]byte) {

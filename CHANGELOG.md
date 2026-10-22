@@ -2,6 +2,13 @@
 
 All notable changes to moldrain are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- The file store fails a load with `ErrCorrupt` when a record before the last is damaged, instead of loading the records before it and compacting the rest away
+- A change log without a snapshot fails the load with `ErrCorrupt` instead of being replaced by an empty snapshot
+
 ## [0.1.0] - 2026-10-21
 
 ### Added

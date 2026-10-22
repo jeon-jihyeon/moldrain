@@ -65,20 +65,25 @@ func unframe(rec []byte) ([]byte, error) {
 // Splits concatenated frames for stores that keep the log as one byte stream
 // good is the length of the whole frames
 // A caller cuts a torn tail there
-func splitFrames(b []byte) (frames [][]byte, good int) {
+// A torn tail is a frame that runs past the end or a bad frame nothing follows
+// A bad frame with bytes after it fails with ErrCorrupt
+func splitFrames(b []byte) (frames [][]byte, good int, err error) {
 	for len(b)-good >= frameHeadLen {
-		n := int(binary.BigEndian.Uint32(b[good : good+4]))
-		end := good + frameHeadLen + n
-		if end > len(b) {
+		n := uint64(binary.BigEndian.Uint32(b[good : good+4]))
+		if n > uint64(len(b)-good-frameHeadLen) {
 			break
 		}
+		end := good + frameHeadLen + int(n)
 		if _, err := unframe(b[good:end]); err != nil {
+			if end < len(b) {
+				return nil, good, fmt.Errorf("%w: bad record at byte %d", err, good)
+			}
 			break
 		}
 		frames = append(frames, b[good:end])
 		good = end
 	}
-	return frames, good
+	return frames, good, nil
 }
 
 type enc struct{ b []byte }
