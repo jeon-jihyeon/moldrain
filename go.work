@@ -8,8 +8,5 @@ use (
 	./store/redis
 )
 
-// The modules require versions that are not tagged yet, so local work resolves them to this checkout
-replace (
-	github.com/jeon-jihyeon/moldrain v0.0.0 => ./
-	github.com/jeon-jihyeon/moldrain/resolve/jev v0.0.0 => ./resolve/jev
-)
+// Bench resolves the unpublished Jev module from this checkout
+replace github.com/jeon-jihyeon/moldrain/resolve/jev v0.0.0 => ./resolve/jev

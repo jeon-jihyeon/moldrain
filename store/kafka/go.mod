@@ -3,7 +3,7 @@ module github.com/jeon-jihyeon/moldrain/store/kafka
 go 1.24.10
 
 require (
-	github.com/jeon-jihyeon/moldrain v0.0.0
+	github.com/jeon-jihyeon/moldrain v0.1.0
 	github.com/stretchr/testify v1.12.1
 	github.com/twmb/franz-go v1.20.7
 	github.com/twmb/franz-go/pkg/kadm v1.17.2

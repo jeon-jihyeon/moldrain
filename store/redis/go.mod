@@ -3,7 +3,7 @@ module github.com/jeon-jihyeon/moldrain/store/redis
 go 1.24.10
 
 require (
-	github.com/jeon-jihyeon/moldrain v0.0.0
+	github.com/jeon-jihyeon/moldrain v0.1.0
 	github.com/redis/go-redis/v9 v9.22.0
 )
 

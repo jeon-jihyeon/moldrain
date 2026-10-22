@@ -13,6 +13,7 @@ All notable changes to moldrain are listed here. The format follows [Keep a Chan
 - The file store fails a load with `ErrCorrupt` when a record before the last is damaged, instead of loading the records before it and compacting the rest away
 - A change log without a snapshot fails the load with `ErrCorrupt` instead of being replaced by an empty snapshot
 - Bench averages cover only the datasets every contender finished, a gate reads incomplete unless all 14 datasets ran, and a failed resolver call makes its row an error
+- Store and Jev modules require the published root version, so they build without a development workspace
 
 ## [0.1.0] - 2026-10-21
 
