@@ -77,7 +77,13 @@ type Row struct {
 	// Match per second at 1, 4 and 8 goroutines while one goroutine trains
 	// moldrain only
 	MatchPerSec map[string]float64 `json:"match_per_sec,omitempty"`
-	Error       string             `json:"error,omitempty"`
+	// Lines the resolver was asked about counted once per try
+	// Contenders with a resolver only
+	ResolverAsked uint64 `json:"resolver_asked,omitempty"`
+	// Resolve calls that failed
+	// One makes the row an error so a dead endpoint never scores as a resolver
+	ResolverFailed uint64 `json:"resolver_failed,omitempty"`
+	Error          string `json:"error,omitempty"`
 }
 
 type Run struct {
@@ -193,6 +199,10 @@ func run(data, out string, datasets, contenders []string, env runEnv) error {
 			row.Accuracy = measure(p.groups, p.templates, tr)
 			row.LinesPerSec = float64(len(lines)) / median(row.Runs)
 			row.AllocsPerLine, row.BytesPerLine, row.HeapBytes, row.MaxRSSKiB = p.allocs, p.bytes, p.heap, p.rss
+			row.ResolverAsked, row.ResolverFailed = p.asked, p.failed
+			if p.failed > 0 {
+				row.Error = fmt.Sprintf("%d resolve calls failed", p.failed)
+			}
 			if p.python != "" {
 				res.Python, res.Drain3 = p.python, p.drain3
 			}
@@ -229,6 +239,9 @@ type parse struct {
 	rss       int64
 	python    string
 	drain3    string
+	// resolve calls of a contender with a resolver
+	asked  uint64
+	failed uint64
 }
 
 func contend(c string, lines [][]byte, tr *truth, dir, out string, jo jev.Options) (parse, error) {
@@ -302,9 +315,11 @@ func runMoldrain(lines [][]byte, tr *truth, s setup) parse {
 	}
 	elapsed := time.Since(start).Seconds()
 	runtime.ReadMemStats(&after)
+	var calls resolve.Stats
 	if loop != nil {
 		m.Publish()
 		loop.Flush(ctx)
+		calls = loop.Stats()
 		loop.Close()
 	}
 	m.Publish()
@@ -319,6 +334,8 @@ func runMoldrain(lines [][]byte, tr *truth, s setup) parse {
 		seconds:   elapsed,
 		allocs:    float64(after.Mallocs-before.Mallocs) / float64(len(lines)),
 		bytes:     float64(after.TotalAlloc-before.TotalAlloc) / float64(len(lines)),
+		asked:     calls.Asked,
+		failed:    calls.Failed,
 	}
 	for i, l := range labels {
 		p.groups[i] = uint64(t.find(l))

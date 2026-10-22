@@ -1,12 +1,16 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/jeon-jihyeon/moldrain/resolve/jev"
 )
 
 func write(t *testing.T, dir string, files map[string]string) {
@@ -31,7 +35,9 @@ func TestLoad(t *testing.T) {
 	}{
 		{
 			"three lines of two events",
-			map[string]string{"content.txt": "a 1\nb\na 2\n", "truth.txt": "E1\nE2\nE1\n", "templates.tsv": "E1\ta <*>\nE2\tb\n"},
+			map[string]string{
+				"content.txt": "a 1\nb\na 2\n", "truth.txt": "E1\nE2\nE1\n", "templates.tsv": "E1\ta <*>\nE2\tb\n",
+			},
 			want{[]string{"a 1", "b", "a 2"}, []int32{0, 1, 0}, []string{"a <*>", "b"}, []int{2, 1}, false},
 		},
 		{
@@ -108,6 +114,51 @@ func TestReadDrain3(t *testing.T) {
 				got.groups, got.templates, got.seconds = p.groups, p.templates, p.seconds
 			}
 			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+// A resolver whose calls fail makes its row an error instead of a score
+func TestRunResolverCalls(t *testing.T) {
+	type args struct {
+		contender string
+		url       string
+	}
+	type want struct {
+		failed uint64
+		asked  bool
+		err    string
+	}
+	refused := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(refused.Close)
+	tcs := []struct {
+		name string
+		args args
+		want want
+	}{
+		{"the oracle answers every call", args{"oracle", ""}, want{0, true, ""}},
+		{"an endpoint that refuses every call", args{"jev", refused.URL}, want{1, true, "1 resolve calls failed"}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			data, out := t.TempDir(), t.TempDir()
+			dir := filepath.Join(data, "A")
+			require.NoError(t, os.Mkdir(dir, 0o755))
+			write(t, dir, map[string]string{
+				"content.txt":   "alpha beta gamma delta\nalpha zeta eta theta\n",
+				"truth.txt":     "E1\nE1\n",
+				"templates.tsv": "E1\talpha <*> <*> <*>\n",
+			})
+			env := runEnv{runs: 1, jev: jev.Options{URL: tc.args.url}}
+			require.NoError(t, run(data, out, []string{"A"}, []string{tc.args.contender}, env))
+			var res Run
+			require.NoError(t, readJSON(filepath.Join(out, "results.json"), &res))
+			require.Len(t, res.Rows, 1)
+			r := res.Rows[0]
+			assert.Equal(t, tc.want, want{r.ResolverFailed, r.ResolverAsked > 0, r.Error})
 		})
 	}
 }

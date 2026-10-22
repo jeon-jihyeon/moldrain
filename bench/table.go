@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -14,8 +16,13 @@ import (
 func markdown(res Run) string {
 	var b strings.Builder
 	rows := map[string]map[string]Row{}
-	var datasets []string
+	var datasets, entrants []string
+	seen := map[string]bool{}
 	for _, r := range res.Rows {
+		if !seen[r.Contender] {
+			seen[r.Contender] = true
+			entrants = append(entrants, r.Contender)
+		}
 		if rows[r.Dataset] == nil {
 			rows[r.Dataset] = map[string]Row{}
 			datasets = append(datasets, r.Dataset)
@@ -49,13 +56,15 @@ func markdown(res Run) string {
 			cell(func(x Row) float64 { return x.PA }), cell(func(x Row) float64 { return x.FTA }))
 	}
 
-	b.WriteString("\n| Contender | Avg GA | Avg FGA | Avg PA | Avg FTA | Templates per event | Lines per second | Allocs per line | Bytes per line |\n|---|---|---|---|---|---|---|---|---|\n")
+	// averages over any other set would compare contenders on two samples
+	common := finished(datasets, rows, entrants)
+	b.WriteString("\n| Contender | Datasets | Avg GA | Avg FGA | Avg PA | Avg FTA | Templates per event | Lines per second | Allocs per line | Bytes per line |\n|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, c := range allContenders {
 		var n int
 		var ga, fga, pa, fta, tpe, allocs, bytes, lines, seconds float64
-		for _, ds := range datasets {
+		for _, ds := range common {
 			x, ok := rows[ds][c]
-			if !ok || x.Error != "" {
+			if !ok {
 				continue
 			}
 			n++
@@ -78,19 +87,20 @@ func markdown(res Run) string {
 		if !resolved[c] {
 			speed = fmt.Sprintf("%.0f", lines/seconds)
 		}
-		fmt.Fprintf(&b, "| %s | %.3f | %.3f | %.3f | %.3f | %.2f | %s | %s |\n",
-			c, ga/k, fga/k, pa/k, fta/k, tpe/k, speed, mem)
+		fmt.Fprintf(&b, "| %s | %d | %.3f | %.3f | %.3f | %.3f | %.2f | %s | %s |\n",
+			c, n, ga/k, fga/k, pa/k, fta/k, tpe/k, speed, mem)
 	}
 
 	b.WriteString("\n| Gated option | Avg FGA with | Avg FGA without | Largest GA drop | Passes |\n|---|---|---|---|---|\n")
 	for _, opt := range []string{"respecialize", "spans", "punct"} {
 		var with, without float64
-		n := 0
+		n, ran := 0, false
 		worst, worstDS := 0.0, "-"
 		for _, ds := range datasets {
 			x, ok1 := rows[ds][opt]
 			base, ok2 := rows[ds]["moldrain"]
-			if !ok1 || !ok2 || x.Error != "" || base.Error != "" {
+			ran = ran || ok1
+			if !slices.Contains(allDatasets, ds) || !ok1 || !ok2 || x.Error != "" || base.Error != "" {
 				continue
 			}
 			n++
@@ -100,11 +110,16 @@ func markdown(res Run) string {
 				worst, worstDS = d, ds
 			}
 		}
-		if n == 0 {
+		if !ran {
 			continue
 		}
-		pass := with/float64(n) >= without/float64(n) && worst <= 0.02
-		fmt.Fprintf(&b, "| %s | %.3f | %.3f | %.3f %s | %v |\n", opt, with/float64(n), without/float64(n), worst, worstDS, pass)
+		// a gate judges all datasets or none
+		pass := fmt.Sprintf("incomplete %d of %d", n, len(allDatasets))
+		if n == len(allDatasets) {
+			pass = strconv.FormatBool(with >= without && worst <= 0.02)
+		}
+		k := float64(max(n, 1))
+		fmt.Fprintf(&b, "| %s | %.3f | %.3f | %.3f %s | %s |\n", opt, with/k, without/k, worst, worstDS, pass)
 	}
 
 	b.WriteString("\n| Dataset | Match per second at 1 | at 4 | at 8 | 8 over 1 |\n|---|---|---|---|---|\n")
@@ -121,11 +136,27 @@ func markdown(res Run) string {
 	for _, ds := range datasets {
 		x, ok1 := rows[ds]["oracle"]
 		base, ok2 := rows[ds]["moldrain"]
-		if !ok1 || !ok2 {
+		if !ok1 || !ok2 || x.Error != "" || base.Error != "" {
 			continue
 		}
 		fmt.Fprintf(&b, "| %s | %.2f / %.2f | %.3f / %.3f | %.3f / %.3f |\n", ds,
 			base.TemplatesPerEvent, x.TemplatesPerEvent, base.GA, x.GA, base.FGA, x.FGA)
 	}
 	return b.String()
+}
+
+// The datasets every one of the contenders finished without an error
+func finished(datasets []string, rows map[string]map[string]Row, contenders []string) []string {
+	var out []string
+	for _, ds := range datasets {
+		done := true
+		for _, c := range contenders {
+			x, ok := rows[ds][c]
+			done = done && ok && x.Error == ""
+		}
+		if done {
+			out = append(out, ds)
+		}
+	}
+	return out
 }
