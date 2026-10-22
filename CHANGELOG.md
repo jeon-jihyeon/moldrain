@@ -4,6 +4,10 @@ All notable changes to moldrain are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- `Options.MaskVersion`, hashed with the mask count, so a store refuses state learned under masks that marked other tokens
+
 ### Fixed
 
 - The file store fails a load with `ErrCorrupt` when a record before the last is damaged, instead of loading the records before it and compacting the rest away
