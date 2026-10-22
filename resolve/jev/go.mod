@@ -3,7 +3,7 @@ module github.com/jeon-jihyeon/moldrain/resolve/jev
 go 1.24.10
 
 require (
-	github.com/jeon-jihyeon/moldrain v0.0.0
+	github.com/jeon-jihyeon/moldrain v0.1.0
 	github.com/stretchr/testify v1.12.1
 )
 
