@@ -2,6 +2,17 @@
 
 All notable changes to moldrain are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Optional collector records with source metadata and explicit historical replay
+
+### Fixed
+
+- Count retention uses a trusted clock so future record timestamps cannot discard valid counts
+- Published adapters run race tests outside the development workspace on every change
+
 ## [0.1.1] - 2026-10-22
 
 ### Added
