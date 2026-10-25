@@ -43,13 +43,12 @@ jobs:
           working-directory: ${{ matrix.module }}
       - name: go test
         run: go test -race -coverprofile=cover.out ./...
-      # go.work resolves the untagged root for local work
-      # A tag of a module also builds it the way a user does
-      - name: build without the workspace
-        if: matrix.module != '.' && startsWith(github.ref, format('refs/tags/{0}/', matrix.module))
+      # Published adapters must also work without checkout replacements
+      - name: test without the workspace
+        if: matrix.module != '.' && matrix.module != 'bench'
         env:
           GOWORK: "off"
-        run: go build ./...
+        run: go test -race ./...
       - name: Coverage summary
         if: runner.os == 'Linux'
         run: |
