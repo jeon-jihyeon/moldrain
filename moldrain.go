@@ -100,6 +100,10 @@ type Stats struct {
 	Changed   uint64
 	Evicted   uint64
 	Truncated uint64
+	// Count index lines outside the trusted clock bound
+	CountFuture uint64
+	// Count index lines older than retained buckets
+	CountLate uint64
 	// Templates the tree holds without their aliases
 	Clusters int
 	// Time since the oldest change Match cannot see yet
@@ -135,6 +139,9 @@ type Miner struct {
 // A miner that has learned nothing
 func New(opt Options) (*Miner, error) {
 	opt = opt.withDefaults()
+	if opt.CountClock == nil {
+		opt.CountClock = time.Now
+	}
 	if err := opt.validate(); err != nil {
 		return nil, err
 	}
@@ -146,7 +153,7 @@ func New(opt Options) (*Miner, error) {
 		opt:    opt,
 		tz:     opt.tokenizer(),
 		tree:   tr,
-		counts: newCounts(opt.Bucket, opt.KeepBuckets),
+		counts: newCounts(opt.Bucket, opt.KeepBuckets, opt.CountClock),
 	}
 	m.pool.New = func() any {
 		buf := make([]token.Token, 0, 64)
@@ -277,9 +284,11 @@ func (m *Miner) Stats() Stats {
 	n := m.tree.Len()
 	lag := m.pub.lag()
 	m.mu.Unlock()
+	late, future := m.counts.dropped()
 	return Stats{
 		Lines: m.lines.Load(), Created: m.created.Load(), Changed: m.changed.Load(),
 		Evicted: m.evicted.Load(), Truncated: m.truncated.Load(), Clusters: n, PublishLag: lag,
+		CountFuture: future, CountLate: late,
 	}
 }
 

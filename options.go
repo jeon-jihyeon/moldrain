@@ -104,6 +104,8 @@ type Options struct {
 	Bucket time.Duration
 	// Count buckets kept
 	KeepBuckets int
+	// Trusted clock for count retention independent of timestamps supplied with lines
+	CountClock func() time.Time
 }
 
 func (o Options) withDefaults() Options {
