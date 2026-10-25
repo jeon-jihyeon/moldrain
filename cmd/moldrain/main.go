@@ -27,6 +27,8 @@ const usage = `moldrain learns log templates the way Drain does
   moldrain version
 
 Lines come from stdin when no file is given. MOLDRAIN_STATE sets --state when the flag is absent
+mine, match and assay accept --records for moldrain.record/v1 JSONL and --replay-at for a trusted historical clock
+match --records requires --json so collector provenance remains in the result
 `
 
 // Exit when match --strict met a line no template fits
@@ -89,17 +91,22 @@ func flags(name string, getenv func(string) string) common {
 
 func jsonFlag(c common) *bool { return c.fs.Bool("json", false, "print JSON lines") }
 
-func (c common) miner() (*moldrain.Miner, error) {
-	return moldrain.New(moldrain.Options{Tokenizer: moldrain.Tokenizer(*c.tokenizer), SimTh: *c.sim})
+func (c common) miner(clock func() time.Time) (*moldrain.Miner, error) {
+	return moldrain.New(moldrain.Options{Tokenizer: moldrain.Tokenizer(*c.tokenizer), SimTh: *c.sim, CountClock: clock})
 }
 
 func mine(args []string, stdin io.Reader, stdout io.Writer, getenv func(string) string) error {
 	c := flags("mine", getenv)
 	asJSON := jsonFlag(c)
+	in := inputFlags(c)
 	if err := c.fs.Parse(args); err != nil {
 		return err
 	}
-	m, err := c.miner()
+	clock, err := in.clock()
+	if err != nil {
+		return err
+	}
+	m, err := c.miner(clock)
 	if err != nil {
 		return err
 	}
@@ -114,8 +121,8 @@ func mine(args []string, stdin io.Reader, stdout io.Writer, getenv func(string) 
 			return err
 		}
 	}
-	err = eachLine(c.fs.Args(), stdin, func(line []byte) error {
-		m.Train(line, time.Now())
+	err = eachInput(c.fs.Args(), stdin, *in.records, func(line inputLine) error {
+		m.Train(line.body, line.at)
 		return nil
 	})
 	if p != nil {
@@ -128,11 +135,11 @@ func mine(args []string, stdin io.Reader, stdout io.Writer, getenv func(string) 
 	return printClusters(stdout, m.Clusters(), *asJSON)
 }
 
-func load(c common) (*moldrain.Miner, error) {
+func load(c common, clock func() time.Time) (*moldrain.Miner, error) {
 	if *c.state == "" {
 		return nil, errors.New("--state is required")
 	}
-	m, err := c.miner()
+	m, err := c.miner(clock)
 	if err != nil {
 		return nil, err
 	}
@@ -154,10 +161,18 @@ func match(args []string, stdin io.Reader, stdout io.Writer, getenv func(string)
 	c := flags("match", getenv)
 	strict := c.fs.Bool("strict", false, "exit 1 when any line matched no template")
 	asJSON := jsonFlag(c)
+	in := inputFlags(c)
 	if err := c.fs.Parse(args); err != nil {
 		return err
 	}
-	m, err := load(c)
+	clock, err := in.clock()
+	if err != nil {
+		return err
+	}
+	if *in.records && !*asJSON {
+		return errors.New("match --records requires --json to preserve provenance")
+	}
+	m, err := load(c, clock)
 	if err != nil {
 		return err
 	}
@@ -165,17 +180,19 @@ func match(args []string, stdin io.Reader, stdout io.Writer, getenv func(string)
 	enc := json.NewEncoder(stdout)
 	limit := m.Options().MaxLineBytes
 	missed := false
-	err = eachLine(c.fs.Args(), stdin, func(line []byte) error {
-		r, ok := m.Match(line)
+	err = eachInput(c.fs.Args(), stdin, *in.records, func(line inputLine) error {
+		r, ok := m.Match(line.body)
 		missed = missed || !ok
 		if *asJSON {
-			return enc.Encode(newMatchRow(line, r, ok, limit))
+			row := newMatchRow(line.body, r, ok, limit)
+			row.Record, row.TimeBasis = line.record, line.basis
+			return enc.Encode(row)
 		}
 		id := "-"
 		if ok {
 			id = r.ID.String()
 		}
-		_, err := fmt.Fprintf(w, "%s\t%s\n", id, line)
+		_, err := fmt.Fprintf(w, "%s\t%s\n", id, line.body)
 		return err
 	})
 	if err = errors.Join(err, w.Flush()); err != nil {
@@ -193,7 +210,7 @@ func show(args []string, stdout io.Writer, getenv func(string) string) error {
 	if err := c.fs.Parse(args); err != nil {
 		return err
 	}
-	m, err := load(c)
+	m, err := load(c, time.Now)
 	if err != nil {
 		return err
 	}
