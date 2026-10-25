@@ -9,21 +9,23 @@ import (
 )
 
 type matchRow struct {
-	SchemaVersion  string    `json:"schema_version"`
-	Version        string    `json:"version"`
-	EmittedAt      time.Time `json:"emitted_at"`
-	Matched        bool      `json:"matched"`
-	ID             string    `json:"id,omitempty"`
-	Alias          string    `json:"alias,omitempty"`
-	Template       *string   `json:"template"`
-	TemplateBase64 *string   `json:"template_base64,omitempty"`
-	Params         []*string `json:"params"`
-	ParamsBase64   []string  `json:"params_base64"`
-	Line           *string   `json:"line"`
-	LineBase64     string    `json:"line_base64"`
-	InputBytes     int       `json:"input_bytes"`
-	MatchedBytes   int       `json:"matched_bytes"`
-	Truncated      bool      `json:"truncated"`
+	SchemaVersion  string          `json:"schema_version"`
+	Version        string          `json:"version"`
+	EmittedAt      time.Time       `json:"emitted_at"`
+	Matched        bool            `json:"matched"`
+	ID             string          `json:"id,omitempty"`
+	Alias          string          `json:"alias,omitempty"`
+	Template       *string         `json:"template"`
+	TemplateBase64 *string         `json:"template_base64,omitempty"`
+	Params         []*string       `json:"params"`
+	ParamsBase64   []string        `json:"params_base64"`
+	Line           *string         `json:"line"`
+	LineBase64     string          `json:"line_base64"`
+	InputBytes     int             `json:"input_bytes"`
+	MatchedBytes   int             `json:"matched_bytes"`
+	Truncated      bool            `json:"truncated"`
+	Record         *recordMetadata `json:"record,omitempty"`
+	TimeBasis      string          `json:"time_basis,omitempty"`
 }
 
 func newMatchRow(line []byte, r moldrain.Result, matched bool, limit int) matchRow {
