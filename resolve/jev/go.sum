@@ -1,5 +1,5 @@
-github.com/jeon-jihyeon/moldrain v0.1.0 h1:GyNgT9bnTsz7uxsSUM2fyv2q3ezLiNjM+KxTHHAQVxM=
-github.com/jeon-jihyeon/moldrain v0.1.0/go.mod h1:0jqKZJCwcyCFtU0VhmsSlvGljt6DuakGca44VLydTQg=
+github.com/jeon-jihyeon/moldrain v0.1.1 h1:PGUpoVDPhyG8D4aOT3/RES7WePSBBs+Zv2ToR7RC22k=
+github.com/jeon-jihyeon/moldrain v0.1.1/go.mod h1:0jqKZJCwcyCFtU0VhmsSlvGljt6DuakGca44VLydTQg=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 go.uber.org/mock v0.6.0 h1:hyF9dfmbgIX5EfOdasqLsWD6xqpNZlXblLB/Dbnwv3Y=
